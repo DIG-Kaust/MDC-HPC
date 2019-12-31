@@ -12,9 +12,11 @@ a singe Zarr file using Dask for concurrent IO. The resulting file will loaded i
 
 - ``MDC_timing_comparison.ipynb``: Plotting different timings of MDC operation. Used to create figure 2.
 
-- ``Marchenko3D.ipynb``: 3D Marchenko redatuming for single virtual point. Used to create figure 3.
+- ``Marchenko3D.ipynb``: 3D Marchenko redatuming for single virtual point. Create Green's functions to be visualized by
 
-- ``Marchenko3Dmulti.ipynb``: 3D Marchenko redatuming for multiple virtual points. Not used in the paper.
+- ``Marchenko3Dmulti.ipynb``: 3D Marchenko redatuming for multiple virtual points. Not used in the paper. ``Marchenko3D_comparison.ipynb``
+
+- ``Marchenko3D_comparison.ipynb``: Plotting different timings of MDC operation. Used to create figure 3.
 
 
 Auxiliary files:
