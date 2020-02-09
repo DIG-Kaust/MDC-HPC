@@ -1,5 +1,8 @@
-# Reproducible material for EAGE2020 Abstract: "Implementation of large-scale integral operators with modern HPC solutions"
+# Reproducible material for "Implementation of large-scale integral operators with modern HPC solutions"
 ## Authors: M.Ravasi, I.Vasconcelos
+
+
+### Notebooks
 
 All the figures in the abstract can be reproduced by running the following notebooks:
 
@@ -19,12 +22,21 @@ a singe Zarr file using Dask for concurrent IO. The resulting file will loaded i
 - ``Marchenko3D_comparison.ipynb``: Plotting different timings of MDC operation. Used to create figure 3.
 
 
-Auxiliary files:
+### Auxiliary files:
 
 - ``setup-ssh.sh``: Shell script to setup a SSH Dask cluster (note that you will need a ``hostfile.txt`` file in the same directory with the addresses of the nodes you want to
 use when setting up the cluster. Refer to https://docs.dask.org/en/latest/setup/ssh.html for more details.
 - ``utils.py``: Small Python functions used in various notebooks
 
+
+### Environment
+
+To ensure reproducibility of the results, we suggest using the ``requirements.txt`` file when creating an environment.
+
+
+### Input data:
+
+To obtain a copy of the input dataset, concact the authors directly.
 
 **Note:** All notebooks use the ``$STORE_PATH`` enviroment variable to specify the location of the input dataset. Either create this 
 environment variable prior to running a notebook or use ``os.environ["STORE_PATH"] = "/path/to/data/"`` directly within the notebook.
