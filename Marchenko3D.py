@@ -55,8 +55,8 @@ def voronoi_volumes(points):
     return v, vol
 
 
-def run(subsampling, vsz, nvsy, dvsy, ovsy, nvsx, dvsx, ovsx):
-    client = pylops_distributed.utils.backend.dask(hardware='multi', client='be-linrgsn131:8786')
+def run(subsampling, vsz, nvsx, dvsx, ovsx, nvsy, dvsy, ovsy, ixrestart, ixend):
+    client = pylops_distributed.utils.backend.dask(hardware='multi', client='be-linrgsn059:8786')
     client.restart()
     
     nworkers = len(np.array(list(client.ncores().values())))
@@ -90,9 +90,11 @@ def run(subsampling, vsz, nvsy, dvsy, ovsy, nvsx, dvsx, ovsx):
     ds = s[0,1]-s[0,0]
 
     # Virtual points
+    if ixend == -1:
+        ixend = nvsx
     vsy = np.arange(nvsy) * dvsy + ovsy 
     vsx = np.arange(nvsx) * dvsx + ovsx 
-    VSY, VSX = np.meshgrid(vsy, vsx, indexing='ij')
+    VSX, VSY = np.meshgrid(vsx, vsy, indexing='ij')
 
     # Density model
     rho = inputdata_aux['rho']
@@ -105,7 +107,9 @@ def run(subsampling, vsz, nvsy, dvsy, ovsy, nvsx, dvsx, ovsx):
     # Display geometry
     fig, ax = plt.subplots(1, 1, sharey=True, figsize=(8, 6))      
     ax.scatter(r[0], r[1], marker='.', s=200, c='r', edgecolors='k', label='Srcs-Recs')
-    ax.scatter(VSY.ravel(), VSX.ravel(), marker='.', s=300, c='g', edgecolors='k', label='VS')
+    ax.scatter(VSX.ravel(), VSY.ravel(), marker='.', s=300, c='g', edgecolors='k', label='VS')
+    ax.set_xlabel('X')
+    ax.set_ylabel('Y')
     ax.set_title('Geometry')
     plt.legend()
     plt.show()
@@ -117,8 +121,6 @@ def run(subsampling, vsz, nvsy, dvsy, ovsy, nvsx, dvsx, ovsx):
 
     # Read data
     dRtwosided_fft = 2 * da.from_zarr(zarrfile)  # 2 * as per theory you need 2*R
-
-    #nchunks = [max(nfmax // ncores, 1), ns, nr]
     nchunks = [max(nfmax // (nworkers + 1), 1), ns, nr]
     dRtwosided_fft = dRtwosided_fft.rechunk(nchunks)
     dRtwosided_fft = client.persist(dRtwosided_fft)
@@ -131,8 +133,8 @@ def run(subsampling, vsz, nvsy, dvsy, ovsy, nvsx, dvsx, ovsx):
     wav_c = np.argmax(wav)
     
     # Initialize output files where Green's functions are saved
-    nvs_batch = 1
-    nr_batch = 2
+    nvs_batch = 4
+    nr_batch = 4
     gplus_filename = 'Gplus_sub%d.zarr' % subsampling
     gminus_filename = 'Gminus_sub%d.zarr' % subsampling
     gdir_filename = 'Gdir_sub%d.zarr' % subsampling
@@ -144,35 +146,36 @@ def run(subsampling, vsz, nvsy, dvsy, ovsy, nvsx, dvsx, ovsx):
 
     Gplus = zarr.open_array(gplus_filepath, mode='a', 
                             shape=(nt, nr, nvsy * nvsx), 
-                            chunks=(nt, nr // nr_batch, nvsy * nvsx),
+                            chunks=(nt, nr // nr_batch, (nvsy * nvsx) // nvs_batch),
                             #compressor=None,
                             synchronizer=zarr.ThreadSynchronizer(),
                             dtype=np.float32)
     Gminus = zarr.open_array(gminus_filepath, mode='a', 
                              shape=(nt, nr, nvsy * nvsx), 
-                             chunks=(nt, nr // nr_batch, nvsy * nvsx), 
+                             chunks=(nt, nr // nr_batch, (nvsy * nvsx) // nvs_batch), 
                              #compressor=None,
                              synchronizer=zarr.ThreadSynchronizer(),
                              dtype=np.float32)
     Gdir = zarr.open_array(gdir_filepath, mode='a', 
                            shape=(nt, nr, nvsy * nvsx), 
-                           chunks=(nt, nr // nr_batch, nvsy * nvsx), 
+                           chunks=(nt, nr // nr_batch, (nvsy * nvsx) // nvs_batch), 
                            #compressor=None,
                            synchronizer=zarr.ThreadSynchronizer(),
                            dtype=np.float32)
     Grtm = zarr.open_array(grtm_filepath, mode='a', 
                            shape=(nt, nr, nvsy * nvsx), 
-                           chunks=(nt, nr // nr_batch, nvsy * nvsx), 
+                           chunks=(nt, nr // nr_batch, (nvsy * nvsx) // nvs_batch), 
                            #compressor=None,
                            synchronizer=zarr.ThreadSynchronizer(),
                            dtype=np.float32)
     print(Gplus.info, Gminus.info)
-    for ivsy, vsyp in enumerate(vsy):
-        for ivsx, vsxp in enumerate(vsx):
+
+    for ivsx, vsxp in enumerate(vsx[ixrestart:ixend], ixrestart):
+        for ivsy, vsyp in enumerate(vsy):
             t0 = time.time()
             
-            # Virtual point (y, x, z)
-            vs = np.array([vsyp, vsxp, vsz])
+            # Virtual point (x, y, z)
+            vs = np.array([vsxp, vsyp, vsz])
             
             # Create window
             distVS = np.sqrt((vs[0]-r[0])**2 +(vs[1]-r[1])**2 +(vs[2]-r[2])**2)
@@ -231,10 +234,8 @@ def run(subsampling, vsz, nvsy, dvsy, ovsy, nvsx, dvsx, ovsx):
             df1_inv = dcgls(dMop, dd.ravel(), niter=n_iter, tol=0, client=client)[0]
             df1_inv = df1_inv.reshape(2*(2*nt-1), nr)
 
-
             # Add initial guess to estimated focusing functions
-            df1_inv_tot = df1_inv + da.concatenate((da.zeros((2*nt-1, nr)), 
-                                                    dfd_plus))
+            df1_inv_tot = df1_inv + da.concatenate((da.zeros((2*nt-1, nr)), dfd_plus))
 
             # Estimate Green's functions
             dg_inv = dGop * df1_inv_tot.flatten()
@@ -243,21 +244,18 @@ def run(subsampling, vsz, nvsy, dvsy, ovsy, nvsx, dvsx, ovsx):
             dd, dp0_minus, df1_inv_tot, dg_inv = da.compute(dd, dp0_minus, df1_inv_tot, dg_inv)
             dg_inv = np.real(dg_inv)
 
-
             # Extract up and down focusing and Green's functions from model vectors
             df1_inv_minus, df1_inv_plus = df1_inv_tot[:(2*nt-1)].T, df1_inv_tot[(2*nt-1):].T
-
             dg_inv_minus, dg_inv_plus =  -dg_inv[:(2*nt-1)].T, np.fliplr(dg_inv[(2*nt-1):].T)
-            dg_inv_tot = dg_inv_minus + dg_inv_plus
             
             # Remove acausal artefacts in upgoing Green's functions
             dg_inv_minus = dg_inv_minus * (1-w)            
 
             # Save Green's functions
-            Gplus[:, :, ivsy * nvsx + ivsx] = (dg_inv_plus[:, nt-1:].T).astype(np.float32)
-            Gminus[:, :, ivsy * nvsx + ivsx] = (dg_inv_minus[:, nt-1:].T).astype(np.float32)
-            Gdir[:, :, ivsy * nvsx + ivsx] = (G0sub).astype(np.float32)
-            Grtm[:, :, ivsy * nvsx + ivsx] = (dp0_minus[:, nt-1:].T).astype(np.float32)
+            Gplus[:, :, ivsx * nvsy + ivsy] = (dg_inv_plus[:, nt-1:].T).astype(np.float32)
+            Gminus[:, :, ivsx * nvsy + ivsy] = (dg_inv_minus[:, nt-1:].T).astype(np.float32)
+            Gdir[:, :, ivsx * nvsy + ivsy] = (G0sub).astype(np.float32)
+            Grtm[:, :, ivsx * nvsy + ivsy] = (dp0_minus[:, nt-1:].T).astype(np.float32)
 
             print('Working with point', vs, '.... Excecution time: ', time.time() - t0, ' s')
             
@@ -326,14 +324,16 @@ def run(subsampling, vsz, nvsy, dvsy, ovsy, nvsx, dvsx, ovsx):
 
 if __name__ == '__main__':
     subsampling = int(sys.argv[1])
-    vsz = float(sys.argv[2])
-    nvsy = int(sys.argv[3])
-    dvsy = float(sys.argv[4])
-    ovsy = float(sys.argv[5])
-    nvsx = int(sys.argv[6])
-    dvsx = float(sys.argv[7])
-    ovsx = float(sys.argv[8])
-    run(subsampling, vsz, nvsy, dvsy, ovsy, nvsx, dvsx, ovsx)
+    vsz = float(sys.argv[2]) # depth of line
+    nvsx = int(sys.argv[3]) # number of samples along x-line
+    dvsx = float(sys.argv[4]) # sampling of x-line
+    ovsx = float(sys.argv[5]) # origin of x-line
+    nvsy = int(sys.argv[6]) # number of samples along y-line
+    dvsy = float(sys.argv[7]) # sampling of y-line
+    ovsy = float(sys.argv[8]) # origin of y-line
+    ixrestart = int(sys.argv[9]) # restart from x-line with index ixrestart
+    ixend = int(sys.argv[10]) # end at x-line with index ixend
+    run(subsampling, vsz, nvsx, dvsx, ovsx, nvsy, dvsy, ovsy, ixrestart, ixend)
 
 
 
