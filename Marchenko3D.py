@@ -24,6 +24,9 @@ from scipy.sparse.linalg import cg, lsqr
 from scipy.signal import convolve, filtfilt
 from scipy.spatial import Voronoi, ConvexHull, voronoi_plot_2d
 
+from dask_jobqueue import PBSCluster
+from dask.distributed import Client
+
 from pylops.basicoperators import *
 from pylops.waveeqprocessing.mdd       import MDC
 from pylops.utils.wavelets             import *
@@ -56,13 +59,33 @@ def voronoi_volumes(points):
 
 
 def run(subsampling, vsz, nvsx, dvsx, ovsx, nvsy, dvsy, ovsy, ixrestart, ixend):
-    client = pylops_distributed.utils.backend.dask(hardware='multi', client='be-linrgsn059:8786')
-    client.restart()
-    
-    nworkers = len(np.array(list(client.ncores().values())))
+    nworkers = 16
+    cluster = PBSCluster(cores=16,
+                         memory='128GB',
+                         shebang='#!/bin/bash',
+                         resource_spec='nodes=1:baloo',
+                         queue='normal',
+                         #name='Marchenko-dask',
+                         walltime='05:00:00',
+                         project='account')
+    cluster.scale(jobs=nworkers)
+    client = Client(cluster)
+    nworkers_connected = 0
+    while nworkers > nworkers_connected:
+        time.sleep(30)
+        client.restart()
+        print('Client', client)
+        nworkers_connected = len(np.array(list(client.ncores().values())))
+        print('Nworkers', nworkers_connected)        
+
+    nworkers_connected = len(np.array(list(client.ncores().values())))
     ncores = np.sum(np.array(list(client.ncores().values())))
+    
+    print('Client', client)
+    print('Dashboard',cluster.dashboard_link)
     print('Nworkers', nworkers)
     print('Ncores', ncores)
+    print('Subsampling', subsampling)
 
     # Input parameters 
     vel = 2400.0        # velocity
@@ -252,6 +275,7 @@ def run(subsampling, vsz, nvsx, dvsx, ovsx, nvsy, dvsy, ovsy, ixrestart, ixend):
             dg_inv_minus = dg_inv_minus * (1-w)            
 
             # Save Green's functions
+            print(ivsx * nvsy + ivsy)
             Gplus[:, :, ivsx * nvsy + ivsy] = (dg_inv_plus[:, nt-1:].T).astype(np.float32)
             Gminus[:, :, ivsx * nvsy + ivsy] = (dg_inv_minus[:, nt-1:].T).astype(np.float32)
             Gdir[:, :, ivsx * nvsy + ivsy] = (G0sub).astype(np.float32)
