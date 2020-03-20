@@ -58,15 +58,15 @@ def voronoi_volumes(points):
     return v, vol
 
 
-def run(subsampling, vsz, nvsx, dvsx, ovsx, nvsy, dvsy, ovsy, ixrestart, ixend):
-    nworkers = 16
+def run(subsampling, vsz, nvsx, dvsx, ovsx, nvsy, dvsy, ovsy, ixrestart, ixend, iyrestart, iyend):
+    nworkers = 14
     cluster = PBSCluster(cores=16,
                          memory='128GB',
                          shebang='#!/bin/bash',
                          resource_spec='nodes=1:baloo',
                          queue='normal',
                          #name='Marchenko-dask',
-                         walltime='05:00:00',
+                         walltime='24:00:00',
                          project='account')
     cluster.scale(jobs=nworkers)
     client = Client(cluster)
@@ -115,6 +115,8 @@ def run(subsampling, vsz, nvsx, dvsx, ovsx, nvsy, dvsy, ovsy, ixrestart, ixend):
     # Virtual points
     if ixend == -1:
         ixend = nvsx
+    if iyend == -1:
+        iyend = nvsy
     vsy = np.arange(nvsy) * dvsy + ovsy 
     vsx = np.arange(nvsx) * dvsx + ovsx 
     VSX, VSY = np.meshgrid(vsx, vsy, indexing='ij')
@@ -194,7 +196,7 @@ def run(subsampling, vsz, nvsx, dvsx, ovsx, nvsy, dvsy, ovsy, ixrestart, ixend):
     print(Gplus.info, Gminus.info)
 
     for ivsx, vsxp in enumerate(vsx[ixrestart:ixend], ixrestart):
-        for ivsy, vsyp in enumerate(vsy):
+        for ivsy, vsyp in enumerate(vsy[iyrestart:iyend], iyrestart):
             t0 = time.time()
             
             # Virtual point (x, y, z)
@@ -275,7 +277,7 @@ def run(subsampling, vsz, nvsx, dvsx, ovsx, nvsy, dvsy, ovsy, ixrestart, ixend):
             dg_inv_minus = dg_inv_minus * (1-w)            
 
             # Save Green's functions
-            print(ivsx * nvsy + ivsy)
+            #print(ivsx * nvsy + ivsy)
             Gplus[:, :, ivsx * nvsy + ivsy] = (dg_inv_plus[:, nt-1:].T).astype(np.float32)
             Gminus[:, :, ivsx * nvsy + ivsy] = (dg_inv_minus[:, nt-1:].T).astype(np.float32)
             Gdir[:, :, ivsx * nvsy + ivsy] = (G0sub).astype(np.float32)
@@ -357,7 +359,9 @@ if __name__ == '__main__':
     ovsy = float(sys.argv[8]) # origin of y-line
     ixrestart = int(sys.argv[9]) # restart from x-line with index ixrestart
     ixend = int(sys.argv[10]) # end at x-line with index ixend
-    run(subsampling, vsz, nvsx, dvsx, ovsx, nvsy, dvsy, ovsy, ixrestart, ixend)
+    iyrestart = int(sys.argv[11]) # restart from y-line with index iyrestart
+    iyend = int(sys.argv[12]) # end at y-line with index iyend
+    run(subsampling, vsz, nvsx, dvsx, ovsx, nvsy, dvsy, ovsy, ixrestart, ixend, iyrestart, iyend)
 
 
 

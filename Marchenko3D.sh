@@ -1,11 +1,8 @@
 #!/usr/bin/env bash
 
-export PATH=~/miniconda3/bin:$PATH
-eval "$(conda shell.bash hook)"
-conda activate pylops-distributed
-
 #export OMP_NUM_THREADS=12
 #export MKL_NUM_THREADS=12
-export STORE_PATH=/project/fsenter/mrava/Marchenko3D/
+export STORE_PATH=/work51/mrava/MADA/book/edi/Marchenko/Synclinal_flatwavelet_3D/Data/
 
-python Marchenko3D.py 4 650 71 20 200 41 20 200 0 -1
+python Marchenko3D.py 2 650 71 20 200 41 20 200 10 12 0 -1
+
