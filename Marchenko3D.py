@@ -98,7 +98,6 @@ def run(subsampling, vsz, nvsx, dvsx, ovsx, nvsy, dvsy, ovsy, ixrestart, ixend, 
     inputfile_aux = os.environ["STORE_PATH"] + '3DMarchenko_auxiliary_2.npz' 
     zarrfile = os.environ["STORE_PATH"] + 'input3D_sub%d_ffirst.zarr' % subsampling
 
-
     # Load input
     inputdata_aux = np.load(inputfile_aux)
 
@@ -223,8 +222,12 @@ def run(subsampling, vsz, nvsx, dvsx, ovsx, nvsy, dvsy, ovsy, ixrestart, ixend, 
             # differentiate to get same as FD modelling
             G0sub = np.diff(G0sub, axis=0)
             G0sub = np.vstack([G0sub, np.zeros(nr)])
+            
+            # Ensure w and G0sub_ana is float32
+            G0sub = G0sub.astype(np.float32)
+            w = w.astype(np.float32)
 
-            # Inversion
+            # Create operators for inversion
             dRop = dMDC(dRtwosided_fft, nt=2*nt-1, nv=1, dt=dt, dr=darea, twosided=True,
                         saveGt=False)
             dR1op = dMDC(dRtwosided_fft, nt=2*nt-1, nv=1, dt=dt, dr=darea, twosided=True, 
