@@ -26,5 +26,8 @@ wheels/
 MANIFEST
 *~
 
+# Notebooks
+.ipynb_checkpoints/
+
 # Data
 GreensFunctions/

@@ -207,6 +207,10 @@ def run(subsampling, vsz, nvsx, dvsx, ovsx, nvsy, dvsy, ovsy, ivsrestart, ivsend
         # Differentiate to get same as FD modelling
         G0sub = np.diff(G0sub, axis=-1)
         G0sub = np.concatenate([G0sub, np.zeros((nr, nvssim, 1))], axis=-1)
+        
+        # Ensure w and G0sub_ana is float32
+        G0sub = G0sub.astype(np.float32)
+        w = w.astype(np.float32)
 
         # Inversion
         df1_inv_minus, df1_inv_plus, dp0_minus, dg_inv_minus, dg_inv_plus = \
