@@ -56,7 +56,7 @@ def voronoi_volumes(points):
 
 
 def run(subsampling, vsz, nvsx, dvsx, ovsx, nvsy, dvsy, ovsy, ixrestart, ixend):
-    client = pylops_distributed.utils.backend.dask(hardware='multi', client='be-linrgsn059:8786')
+    client = pylops_distributed.utils.backend.dask(hardware='multi', client='be-linrgsn214:8786')
     client.restart()
     
     nworkers = len(np.array(list(client.ncores().values())))
@@ -119,7 +119,7 @@ def run(subsampling, vsz, nvsx, dvsx, ovsx, nvsy, dvsy, ovsy, ixrestart, ixend):
     print('Integration area %f' % darea)
 
     # Read data
-    dRtwosided_fft = 2 * da.from_zarr(zarrfile)  # 2 * as per theory you need 2*R
+    dRtwosided_fft = 2 * np.sqrt(2 * nt - 1) * dt * darea * da.from_zarr(zarrfile)  # 2 * as per theory you need 2*R
     nchunks = [max(nfmax // (nworkers + 1), 1), ns, nr]
     dRtwosided_fft = dRtwosided_fft.rechunk(nchunks)
     dRtwosided_fft = client.persist(dRtwosided_fft)
@@ -168,6 +168,15 @@ def run(subsampling, vsz, nvsx, dvsx, ovsx, nvsy, dvsy, ovsy, ixrestart, ixend):
                            synchronizer=zarr.ThreadSynchronizer(),
                            dtype=np.float32)
     print(Gplus.info, Gminus.info)
+    
+    # Create operators for inversion
+    dRop = dMDC(dRtwosided_fft, nt=2*nt-1, nv=1, dt=dt, dr=darea, twosided=True,
+                saveGt=False, prescaled=True)
+    dR1op = dMDC(dRtwosided_fft, nt=2*nt-1, nv=1, dt=dt, dr=darea, twosided=True, 
+                 saveGt=False, conj=True, prescaled=True)
+    dRollop = dRoll((2*nt-1) * nr,
+                   dims=(2*nt-1, nr),
+                   dir=0, shift=-1)
 
     for ivsx, vsxp in enumerate(vsx[ixrestart:ixend], ixrestart):
         for ivsy, vsyp in enumerate(vsy):
@@ -192,28 +201,20 @@ def run(subsampling, vsz, nvsx, dvsx, ovsx, nvsy, dvsy, ovsy, ixrestart, ixend):
                 w  = filtfilt(smooth, 1, w)    
 
             # Create analytical direct wave
-            G0sub = directwave(wav, directVS, nt, dt, nfft=2**11, dist=distVS, kind='3d') 
+            G0sub = directwave(wav, directVS, nt, dt, nfft=2**11, 
+                               dist=distVS, derivative=False, kind='3d') 
 
             # Differentiate to get same as FD modelling
             G0sub = np.diff(G0sub, axis=0)
             G0sub = np.vstack([G0sub, np.zeros(nr)])
-            
+           
             # Ensure w and G0sub_ana is float32
             G0sub = G0sub.astype(np.float32)
             w = w.astype(np.float32)
 
-            # Create operators for inversion
-            dRop = dMDC(dRtwosided_fft, nt=2*nt-1, nv=1, dt=dt, dr=darea, twosided=True,
-                        saveGt=False)
-            dR1op = dMDC(dRtwosided_fft, nt=2*nt-1, nv=1, dt=dt, dr=darea, twosided=True, 
-                         saveGt=False, conj=True)
-            dRollop = dRoll((2*nt-1) * nr,
-                           dims=(2*nt-1, nr),
-                           dir=0, shift=-1)
-
             # Input focusing function
             dfd_plus =  np.concatenate((np.fliplr(G0sub.T).T, 
-                                        np.zeros((nt-1, nr))))
+                                        np.zeros((nt-1, nr), dtype=np.float32)))
             dfd_plus = da.from_array(dfd_plus)
 
             dWop = dDiagonal(w.T.flatten())
@@ -230,7 +231,7 @@ def run(subsampling, vsz, nvsx, dvsx, ovsx, nvsy, dvsy, ovsy, ixrestart, ixend):
 
             # Create data
             dd = dWop*dRop*dfd_plus.flatten()
-            dd = da.concatenate((dd.reshape(2*nt-1, nr), da.zeros((2*nt-1, nr))))
+            dd = da.concatenate((dd.reshape(2*nt-1, nr), da.zeros((2*nt-1, nr), dtype=np.float32)))
 
             # Inverse focusing functions
             df1_inv = dcgls(dMop, dd.ravel(), niter=n_iter, tol=0, client=client)[0]
@@ -277,7 +278,6 @@ def run(subsampling, vsz, nvsx, dvsx, ovsx, nvsy, dvsy, ovsy, ixrestart, ixend):
             ax.set_xlim(800, 1000);
             fig.colorbar(im, ax=ax);
             
-
             fig, axs = plt.subplots(3, 1, sharey=True, figsize=(16, 20))
             axs[0].imshow(dp0_minus.T, cmap='gray', vmin=-clip, vmax=clip, extent=(0, nr, t[-1], -t[-1]))
             axs[0].set_title(r'$p_0^-$'), axs[0].set_xlabel(r'$x_R$'), axs[0].set_ylabel(r'$t$')
@@ -295,7 +295,6 @@ def run(subsampling, vsz, nvsx, dvsx, ovsx, nvsy, dvsy, ovsy, ixrestart, ixend):
             axs[2].set_xlim(nr//2-100,nr//2+100)
             axs[2].set_ylim(1, -1);
 
-            
             fig, ax = plt.subplots(1, 1, sharey=True, figsize=(16, 3))
             ax.imshow(dp0_minus.T, cmap='gray', vmin=-clip, vmax=clip,
                       extent=(0, nr, t[-1], -t[-1]))
