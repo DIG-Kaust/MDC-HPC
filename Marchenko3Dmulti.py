@@ -56,14 +56,13 @@ def voronoi_volumes(points):
 
 
 def run(subsampling, vsz, nvsx, dvsx, ovsx, nvsy, dvsy, ovsy, ivsrestart, ivsend, nvssim):
-    client = pylops_distributed.utils.backend.dask(hardware='multi', client='be-linrgsn059:8786')
+    client = pylops_distributed.utils.backend.dask(hardware='multi', client='be-linrgsn214:8786')
     client.restart()
     
     nworkers = len(np.array(list(client.ncores().values())))
     ncores = np.sum(np.array(list(client.ncores().values())))
 
     print('Client', client)
-    print('Dashboard',cluster.dashboard_link)
     print('Nworkers', nworkers)
     print('Ncores', ncores)
     print('Subsampling', subsampling)
@@ -123,7 +122,7 @@ def run(subsampling, vsz, nvsx, dvsx, ovsx, nvsy, dvsy, ovsy, ivsrestart, ivsend
     print('Integration area %f' % darea)
 
     # Read data
-    dRtwosided_fft = 2 * da.from_zarr(zarrfile)  # 2 * as per theory you need 2*R
+    dRtwosided_fft = 2 * np.sqrt(2 * nt - 1) * dt * darea * da.from_zarr(zarrfile)  # 2 * as per theory you need 2*R
     nchunks = [max(nfmax // (nworkers + 1), 1), ns, nr]
     dRtwosided_fft = dRtwosided_fft.rechunk(nchunks)
     dRtwosided_fft = client.persist(dRtwosided_fft)
@@ -175,7 +174,8 @@ def run(subsampling, vsz, nvsx, dvsx, ovsx, nvsy, dvsy, ovsy, ivsrestart, ivsend
 
     # Common operator
     MarchenkoWM = dMarchenko(dRtwosided_fft, nt=nt, dt=dt, dr=darea, wav=wav,
-                             toff=toff, nsmooth=nsmooth, saveRt=False)
+                             toff=toff, nsmooth=nsmooth, saveRt=False, 
+                             prescaled=True, dtype='float32')
 
     for ivs in range(ivsrestart, ivsend, nvssim):
         t0 = time.time()
@@ -202,12 +202,11 @@ def run(subsampling, vsz, nvsx, dvsx, ovsx, nvsy, dvsy, ovsy, ivsrestart, ivsend
         # Create analytical direct wave
         G0sub = np.zeros((nr, nvssim, nt))
         for ivsg0 in range(nvssim):
-            G0sub[:, ivsg0] = directwave(wav, directVS[:,ivsg0], nt, dt, nfft=2**11, dist=distVS[:,ivsg0], kind='3d').T
-            
+            G0sub[:, ivsg0] = directwave(wav, directVS[:,ivsg0], nt, dt, nfft=2**11, dist=distVS[:,ivsg0], kind='3d', derivative=False).T
         # Differentiate to get same as FD modelling
         G0sub = np.diff(G0sub, axis=-1)
-        G0sub = np.concatenate([G0sub, np.zeros((nr, nvssim, 1))], axis=-1)
-        
+        G0sub = np.concatenate([G0sub, np.zeros((nr, nvssim, 1))], axis=-1)     
+
         # Ensure w and G0sub_ana is float32
         G0sub = G0sub.astype(np.float32)
         w = w.astype(np.float32)
