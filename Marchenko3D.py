@@ -142,7 +142,9 @@ def run(subsampling, vsz, nvsx, dvsx, ovsx, nvsy, dvsy, ovsy, ixrestart, ixend):
     gminus_filepath = os.environ["STORE_PATH"]+gminus_filename
     gdir_filepath = os.environ["STORE_PATH"]+gdir_filename
     grtm_filepath = os.environ["STORE_PATH"]+grtm_filename
-
+        
+    if np.prod(np.array([nt, nr // nr_batch, (nvsy * nvsx) // nvs_batch])) * 4 > 2147483647:
+            raise ValueError('Zarr file chunks too big for BLOSC Codec, increase number of nvs_batch and/or nr_batch')
     Gplus = zarr.open_array(gplus_filepath, mode='a', 
                             shape=(nt, nr, nvsy * nvsx), 
                             chunks=(nt, nr // nr_batch, (nvsy * nvsx) // nvs_batch),
