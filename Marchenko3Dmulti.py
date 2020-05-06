@@ -23,6 +23,8 @@ from scipy.linalg import lstsq, solve
 from scipy.sparse.linalg import cg, lsqr
 from scipy.signal import convolve, filtfilt
 from scipy.spatial import Voronoi, ConvexHull, voronoi_plot_2d
+from dask_jobqueue import PBSCluster
+from dask.distributed import Client
 
 from pylops.basicoperators import *
 from pylops.waveeqprocessing.mdd       import MDC
@@ -42,7 +44,6 @@ from pylops_distributed.optimization.cg import cg as dcg
 from pylops_distributed.optimization.cg import cgls as dcgls
 
 
-
 def voronoi_volumes(points):
     v = Voronoi(points)
     vol = np.zeros(v.npoints)
@@ -56,13 +57,33 @@ def voronoi_volumes(points):
 
 
 def run(subsampling, vsz, nvsx, dvsx, ovsx, nvsy, dvsy, ovsy, ivsrestart, ivsend, nvssim):
-    client = pylops_distributed.utils.backend.dask(hardware='multi', client='be-linrgsn214:8786')
-    client.restart()
-    
-    nworkers = len(np.array(list(client.ncores().values())))
+    print('Start...')
+    t0 = time.time()
+    nworkers = 8
+    cluster = PBSCluster(cores=16,
+                         processes=1,
+                         memory='128GB',
+                         shebang='#!/bin/bash',
+                         resource_spec='nodes=1:baloo',
+                         queue='normal',
+                         #name='Marchenko-dask',
+                         walltime='24:00:00',
+                         project='account')
+    cluster.scale(jobs=nworkers)
+    client = Client(cluster)
+    nworkers_connected = 0
+    while nworkers > nworkers_connected:
+        time.sleep(10)
+        client.restart()
+        print('Client', client)
+        nworkers_connected = len(np.array(list(client.ncores().values())))
+        print('Nworkers', nworkers_connected)        
+
+    nworkers_connected = len(np.array(list(client.ncores().values())))
     ncores = np.sum(np.array(list(client.ncores().values())))
 
     print('Client', client)
+    print('Dashboard',cluster.dashboard_link)
     print('Nworkers', nworkers)
     print('Ncores', ncores)
     print('Subsampling', subsampling)
@@ -135,8 +156,8 @@ def run(subsampling, vsz, nvsx, dvsx, ovsx, nvsy, dvsy, ovsy, ivsrestart, ivsend
     wav_c = np.argmax(wav)
     
     # Initialize output files where Green's functions are saved
-    nvs_batch = 4
-    nr_batch = 4
+    nvs_batch = (nvsx * nvsy) // nvssim
+    nr_batch = 1
     gplus_filename = 'Gplus_multi_sub%d.zarr' % subsampling
     gminus_filename = 'Gminus_multi_sub%d.zarr' % subsampling
     gdir_filename = 'Gdir_multi_sub%d.zarr' % subsampling
@@ -145,9 +166,7 @@ def run(subsampling, vsz, nvsx, dvsx, ovsx, nvsy, dvsy, ovsy, ivsrestart, ivsend
     gminus_filepath = os.environ["STORE_PATH"]+gminus_filename
     gdir_filepath = os.environ["STORE_PATH"]+gdir_filename
     grtm_filepath = os.environ["STORE_PATH"]+grtm_filename
-    
-    if np.prod(np.array([nt, nr // nr_batch, (nvsy * nvsx) // nvs_batch])) * 4 > 2147483647:
-            raise ValueError('Zarr file chunks too big for BLOSC Codec, increase number of nvs_batch and/or nr_batch')
+
     Gplus = zarr.open_array(gplus_filepath, mode='a', 
                             shape=(nt, nr, nvsy * nvsx), 
                             chunks=(nt, nr // nr_batch, (nvsy * nvsx) // nvs_batch),
@@ -178,6 +197,7 @@ def run(subsampling, vsz, nvsx, dvsx, ovsx, nvsy, dvsy, ovsy, ivsrestart, ivsend
     MarchenkoWM = dMarchenko(dRtwosided_fft, nt=nt, dt=dt, dr=darea, wav=wav,
                              toff=toff, nsmooth=nsmooth, saveRt=False, 
                              prescaled=True, dtype='float32')
+    print('Done with preparation.... Execution time: ', time.time() - t0, ' s')
 
     for ivs in range(ivsrestart, ivsend, nvssim):
         t0 = time.time()
@@ -205,6 +225,7 @@ def run(subsampling, vsz, nvsx, dvsx, ovsx, nvsy, dvsy, ovsy, ivsrestart, ivsend
         G0sub = np.zeros((nr, nvssim, nt))
         for ivsg0 in range(nvssim):
             G0sub[:, ivsg0] = directwave(wav, directVS[:,ivsg0], nt, dt, nfft=2**11, dist=distVS[:,ivsg0], kind='3d', derivative=False).T
+        
         # Differentiate to get same as FD modelling
         G0sub = np.diff(G0sub, axis=-1)
         G0sub = np.concatenate([G0sub, np.zeros((nr, nvssim, 1))], axis=-1)     
@@ -220,13 +241,14 @@ def run(subsampling, vsz, nvsx, dvsx, ovsx, nvsy, dvsy, ovsy, ivsrestart, ivsend
 
         # Remove acausal artefacts in upgoing Green's functions
         dg_inv_minus = dg_inv_minus * (1-w)            
+        print('Working with points', ivs, '-', ivs+nvssim, '.... Excecution time: ', time.time() - t0, ' s')
 
         # Save Green's functions
         Gplus[:, :, ivs:ivs+nvssim] = (np.transpose(dg_inv_plus[:, :, nt-1:], (2, 0, 1))).astype(np.float32)
         Gminus[:, :, ivs:ivs+nvssim] = (np.transpose(dg_inv_minus[:, :, nt-1:], (2, 0, 1))).astype(np.float32)
         Gdir[:, :, ivs:ivs+nvssim] = (np.transpose(G0sub, (2, 0, 1))).astype(np.float32)
         Grtm[:, :, ivs:ivs+nvssim] = (np.transpose(dp0_minus[:, :, nt-1:], (2, 0, 1))).astype(np.float32)
-        print('Working with points', ivs, '-', ivs+nvssim, '.... Excecution time: ', time.time() - t0, ' s')
+        print('........................................ Saving time: ', time.time() - t0, ' s')
         
     client.close()
 

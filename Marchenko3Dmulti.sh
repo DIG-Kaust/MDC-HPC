@@ -8,5 +8,5 @@ conda activate pylops-distributed
 #export MKL_NUM_THREADS=12
 export STORE_PATH=/project/fsenter/mrava/Marchenko3D/
 
-python Marchenko3Dmulti.py 8 650 71 20 200 41 20 200 1060 2900 20
+python Marchenko3Dmulti.py 4 650 71 20 200 41 20 200 0 2900 20
 

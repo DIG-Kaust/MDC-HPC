@@ -42,20 +42,21 @@ from pylops_distributed.optimization.cg import cgls as dcgls
 
 
 def run(subsampling, ivsrestart, ivsend, nvssim, kind):
-    client = pylops_distributed.utils.backend.dask(hardware='multi', client='be-linrgsn151:8786')
+    client = pylops_distributed.utils.backend.dask(hardware='multi', client='be-linrgsn214:8786')
     client.restart()
     
     nworkers = len(np.array(list(client.ncores().values())))
     ncores = np.sum(np.array(list(client.ncores().values())))
     print('Nworkers', nworkers)
     print('Ncores', ncores)
+    
+    t0 = time.time()
 
     # Input parameters 
     nfmax = 300 # max frequency for MDC (#samples)
     n_iter = 10 # iterations
     
     inputfile_aux = os.environ["STORE_PATH"] + '3DMarchenko_auxiliary_2.npz' 
-
 
     # Load input
     inputdata_aux = np.load(inputfile_aux)
@@ -83,7 +84,7 @@ def run(subsampling, ivsrestart, ivsend, nvssim, kind):
     vsx = np.arange(nvsx) * dvsx + ovsx 
     VSX, VSY = np.meshgrid(vsx, vsy, indexing='ij')
     VSX, VSY = VSX.ravel(), VSY.ravel()
-
+    
     # Time axis
     ot, dt, nt = 0, 2.5e-3, 601
     t = np.arange(nt)*dt
@@ -116,7 +117,6 @@ def run(subsampling, ivsrestart, ivsend, nvssim, kind):
     ax1.set_xlim(x[0], x[-1])
     plt.show()
 
-    
     # Load input data   
     if kind=='Mck':
         Gplus = da.from_zarr(os.environ["STORE_PATH"] + 'Gplus_sub%d.zarr' % subsampling)
@@ -124,12 +124,15 @@ def run(subsampling, ivsrestart, ivsend, nvssim, kind):
     else:
         Gplus = da.from_zarr(os.environ["STORE_PATH"] + 'Gdir_sub%d.zarr' % subsampling)
         Gminus = da.from_zarr(os.environ["STORE_PATH"] + 'Grtm_sub%d.zarr' % subsampling)
-    
-    # Read data
-    nchunks = [max(nfmax // nworkers, 1), nr, nvs]
+    print(Gplus, Gminus)
 
-    Gplus = da.concatenate((da.zeros((nt-1, nr, nvs)), Gplus), axis=0)
-    Gplus = Gplus.rechunk(2*nt-1, Gplus.chunks[1][0], Gplus.chunks[2][0])
+    # Read data
+    nchunks_in = [nt, nr, nvs // nworkers]
+    nchunks = [max(nfmax // (nworkers + 1), 1), nr, nvs]
+    
+    Gplus = Gplus.rechunk(nchunks_in)
+    Gplus = da.concatenate((da.zeros((nt-1, nr, nvs), dtype=np.float32), Gplus), axis=0)
+    Gplus = Gplus.rechunk([2*nt-1, nchunks_in[1], nchunks_in[2]])
     Gplus = da.fft.rfft(Gplus, 2*nt-1, axis=0)
     Gplus = Gplus[:nfmax]
     Gplus = Gplus.rechunk(nchunks)
@@ -159,16 +162,17 @@ def run(subsampling, ivsrestart, ivsend, nvssim, kind):
                            synchronizer=zarr.ThreadSynchronizer(),
                            dtype=np.float32)
     print(Radj.info, Rinv.info)
+    
+    # Create operator
+    Gplusop = dMDC(Gplus, nt=2*nt-1, nv=nvssim, dt=dt,  dr=dvsx*dvsy, twosided=True)
+    print('Done with preparation.... Execution time: ', time.time() - t0, ' s')
 
     for ivs in range(ivsrestart, ivsend, nvssim):
-        t0 = time.time()
-        
-        # Create operator
-        Gplusop = dMDC(Gplus, nt=2*nt-1, nv=nvssim, dt=dt,  dr=dvsx*dvsy, twosided=True)
-           
+        t0 = time.time()        
+     
         # Create data
         Gminus_vs = Gminus[:, :, ivs:ivs+nvssim]
-        Gminus_vs = da.concatenate((da.zeros((nt-1, nr, nvssim)), Gminus_vs), axis=0)
+        Gminus_vs = da.concatenate((da.zeros((nt-1, nr, nvssim), dtype=np.float32), Gminus_vs), axis=0)
         Gminus_vs = client.persist(Gminus_vs)
            
         # Adjoint
@@ -177,15 +181,16 @@ def run(subsampling, ivsrestart, ivsend, nvssim, kind):
         Radj_vs = Radj_vs.compute()
 
         # Inversion
-        Rinv_vs = dcgls(Gplusop, Gminus_vs.ravel(), niter=n_iter, compute=False)[0]
+        Rinv_vs = dcgls(Gplusop, Gminus_vs.ravel(), niter=n_iter, tol=0, client=client)[0]
         Rinv_vs = Rinv_vs.reshape(2*nt-1, nvs, nvssim)
         Rinv_vs = Rinv_vs.compute()
-
-        # Save Green's functions
+        print('Working with points', ivs, '-', ivs+nvssim, '... Excecution time: ', time.time() - t0, ' s')
+                        
+        # Save Reflectivities
+        t0 = time.time()
         Radj[:, :, ivs:ivs+nvssim] = (Radj_vs[nt-1:]).astype(np.float32)
         Rinv[:, :, ivs:ivs+nvssim] = (Rinv_vs[nt-1:]).astype(np.float32)
-        
-        print('Working with points', ivs, '-', ivs+nvssim, '... Excecution time: ', time.time() - t0, ' s')
+        print('........................................ Saving time: ', time.time() - t0, ' s')
         
     client.close()
 
