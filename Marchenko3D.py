@@ -132,8 +132,8 @@ def run(subsampling, vsz, nvsx, dvsx, ovsx, nvsy, dvsy, ovsy, ixrestart, ixend):
     wav_c = np.argmax(wav)
     
     # Initialize output files where Green's functions are saved
-    nvs_batch = 4
-    nr_batch = 4
+    nvs_batch = nvsy * nvsx
+    nr_batch = 1
     gplus_filename = 'Gplus_sub%d.zarr' % subsampling
     gminus_filename = 'Gminus_sub%d.zarr' % subsampling
     gdir_filename = 'Gdir_sub%d.zarr' % subsampling
@@ -255,19 +255,20 @@ def run(subsampling, vsz, nvsx, dvsx, ovsx, nvsy, dvsy, ovsy, ixrestart, ixend):
             
             # Remove acausal artefacts in upgoing Green's functions
             dg_inv_minus = dg_inv_minus * (1-w)            
-
+            
+            print('Working with point', vs, '.... Excecution time: ', time.time() - t0, ' s')
+            
             # Save Green's functions
+            t0 = time.time()
             Gplus[:, :, ivsx * nvsy + ivsy] = (dg_inv_plus[:, nt-1:].T).astype(np.float32)
             Gminus[:, :, ivsx * nvsy + ivsy] = (dg_inv_minus[:, nt-1:].T).astype(np.float32)
             Gdir[:, :, ivsx * nvsy + ivsy] = (G0sub).astype(np.float32)
             Grtm[:, :, ivsx * nvsy + ivsy] = (dp0_minus[:, nt-1:].T).astype(np.float32)
-
-            print('Working with point', vs, '.... Excecution time: ', time.time() - t0, ' s')
+            print('........................................ Saving time: ', time.time() - t0, ' s')
             
             """
             # Visualization
             clip=1e-5
-            
             
             fig, ax = plt.subplots(1, 1,  sharey=True, figsize=(20, 5))
             im = ax.imshow(w.T, cmap='gray', extent=(0, nr, t[-1], -t[-1]))
