@@ -29,9 +29,9 @@ a singe Zarr file using Dask for concurrent IO. The resulting file will loaded i
 
 - ``Marchenko3D_comparison.ipynb``: Plotting Marchenko fields for different subsampling factors. Used to create figure 3.
 
-- ``MDD3D.ipynb``: 3D Multi-dimensional deconvolution of Marchenko fields. Not used in the paper.
+- ``MDD3D.ipynb``: 3D Multi-dimensional deconvolution of Marchenko fields. Not used in the abstract.
 
-- ``MDD3D_visualization.ipynb``: Plotting MDD redatumed local responses. Not used in the paper.
+- ``MDD3D_visualization.ipynb``: Plotting MDD redatumed local responses. Not used in the abstract.
 
 
 ### Python scripts
@@ -41,6 +41,8 @@ a singe Zarr file using Dask for concurrent IO. The resulting file will loaded i
 - ``MDCmulti_timing.py``: Timing of MDC operation for multiple virtual sources. Same as ``MDCmulti_timing.ipynb``, used to perform timing of several configurations in 'batch' mode together with ``MDCmulti_timing.sh``
 
 - ``Marchenko3D.py``: 3D Marchenko redatuming for an entire depth level. Used to estimate fields in 'batch' mode together with ``Marchenko3D.sh``
+
+- ``Marchenko3Dmulti.py``: 3D Marchenko redatuming for an entire depth level using multiple virtual points. Used to estimate fields in 'batch' mode together with ``Marchenko3Dmulti.sh``
 
 - ``MDD3D.py``: 3D Multi-dimensional deconvolution of Marchenko fields for an entire depth level. Used to estimate fields in 'batch' mode together with ``MDD3D.sh``
 
