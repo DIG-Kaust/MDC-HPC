@@ -59,7 +59,7 @@ def voronoi_volumes(points):
 def run(subsampling, vsz, nvsx, dvsx, ovsx, nvsy, dvsy, ovsy, ivsrestart, ivsend, nvssim):
     print('Start...')
     t0 = time.time()
-    nworkers = 8
+    nworkers = 16
     cluster = PBSCluster(cores=16,
                          processes=1,
                          memory='128GB',
@@ -144,6 +144,7 @@ def run(subsampling, vsz, nvsx, dvsx, ovsx, nvsy, dvsy, ovsy, ivsrestart, ivsend
 
     # Read data
     dRtwosided_fft = 2 * np.sqrt(2 * nt - 1) * dt * darea * da.from_zarr(zarrfile)  # 2 * as per theory you need 2*R
+
     nchunks = [max(nfmax // (nworkers + 1), 1), ns, nr]
     dRtwosided_fft = dRtwosided_fft.rechunk(nchunks)
     dRtwosided_fft = client.persist(dRtwosided_fft)
@@ -244,6 +245,7 @@ def run(subsampling, vsz, nvsx, dvsx, ovsx, nvsy, dvsy, ovsy, ivsrestart, ivsend
         print('Working with points', ivs, '-', ivs+nvssim, '.... Excecution time: ', time.time() - t0, ' s')
 
         # Save Green's functions
+        t0 = time.time()
         Gplus[:, :, ivs:ivs+nvssim] = (np.transpose(dg_inv_plus[:, :, nt-1:], (2, 0, 1))).astype(np.float32)
         Gminus[:, :, ivs:ivs+nvssim] = (np.transpose(dg_inv_minus[:, :, nt-1:], (2, 0, 1))).astype(np.float32)
         Gdir[:, :, ivs:ivs+nvssim] = (np.transpose(G0sub, (2, 0, 1))).astype(np.float32)
