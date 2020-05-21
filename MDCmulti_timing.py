@@ -1,7 +1,9 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# # Multi-dimensional convolution timing benchmarks - multiple virtual sources
+############################################################################
+# Multi-dimensional convolution timing benchmarks - multiple virtual sources
+############################################################################
 import os
 import sys
 import psutil
@@ -46,9 +48,8 @@ def total_ram():
 
 
 def run(subsampling, nvs):
-
     
-    client = pylops_distributed.utils.backend.dask(hardware='multi', client='be-linrgsn130:8786')
+    client = pylops_distributed.utils.backend.dask(hardware='multi', client='be-linrgsn214:8786')
     client.restart()
     
     nworkers = len(np.array(list(client.ncores().values())))
@@ -111,6 +112,8 @@ def run(subsampling, nvs):
     for ivs in range(nvs):
         G0sub[:, ivs] = directwave(wav, directVS[:,ivs], nt, dt, nfft=2**11, dist=distVS[:,ivs], kind='3d').T
 
+    # Ensure G0sub_ana is float32
+    G0sub = G0sub.astype(np.float32)
 
     # Read Reflection response from Zarr file
     dRtwosided_fft = 2 * da.from_zarr(zarrfile)  # 2 * as per theory you need 2*R
@@ -124,9 +127,6 @@ def run(subsampling, nvs):
     dRtwosided_fft = client.persist(dRtwosided_fft)
     client.rebalance(dRtwosided_fft)
 
-    dRtwosided_fft
-
-
     # Create distributed MDC operator
     dRop = dMDC(dRtwosided_fft, nt=2*nt-1, nv=nvs, dt=dt, dr=darea, 
                 twosided=True, saveGt=False)
@@ -134,7 +134,6 @@ def run(subsampling, nvs):
     # Input focusing function
     dfd_plus = np.concatenate((np.flip(G0sub, axis=-1).transpose(2, 0, 1), np.zeros((nt-1, nr, nvs)))).astype(np.float32)
     dfd_plus = da.from_array(dfd_plus).rechunk(dfd_plus.shape)
-
 
     # Run standard redatuming as benchmark
     dp0_minus = dRop.matvec(dfd_plus.flatten())

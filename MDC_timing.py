@@ -98,7 +98,6 @@ def run(subsampling):
     rho = inputdata_aux['rho']
     z, x, y = inputdata_aux['z'], inputdata_aux['x'], inputdata_aux['y']
 
-
     # Read subsurface fields and wavelet to apply to subsurface fields
     G0sub = inputdata_aux['G0'][:, ::subsampling]
     wav = ricker(t[:51], 20)[0]
@@ -108,6 +107,8 @@ def run(subsampling):
     G0sub = np.apply_along_axis(convolve, 0, G0sub, wav, mode='full') 
     G0sub = G0sub[wav_c:][:nt]
 
+    # Ensure G0sub_ana is float32
+    G0sub = G0sub.astype(np.float32)
 
     # Read Reflection response from Zarr file
     dRtwosided_fft = 2 * da.from_zarr(zarrfile)  # 2 * as per theory you need 2*R
@@ -119,13 +120,6 @@ def run(subsampling):
     #nfchunks[-1] += nfmax - np.sum(np.array(nfchunks))
     #nchunks = (tuple(nfchunks), (ns,), (nr,))
     corechunks=False
-    if not ffirst:
-        dRtwosided_fft = dRtwosided_fft.transpose(2, 1, 0)
-    if rechunk:
-        dRtwosided_fft = dRtwosided_fft.rechunk(nchunks)
-    else:
-        nchunks = dRtwosided_fft.chunksize
-    
     if not ffirst:
         dRtwosided_fft = dRtwosided_fft.transpose(2, 1, 0)
     if rechunk:
@@ -144,7 +138,6 @@ def run(subsampling):
     # Input focusing function
     dfd_plus = np.concatenate((np.fliplr(G0sub.T).T, np.zeros((nt-1, nr)))).astype(np.float32)
     dfd_plus = da.from_array(dfd_plus)
-
 
     # Run standard redatuming as benchmark
     dp0_minus = dRop.matvec(dfd_plus.flatten())
