@@ -1,0 +1,55 @@
+---
+# nameOverride: dask
+# fullnameOverride: dask
+
+scheduler:
+  resources: 
+   limits:
+     cpu: 1.8
+     memory: 12G
+   requests:
+     cpu: 1.8
+     memory: 12G
+  nodeSelector: 
+    agentpool: vmss01
+
+worker:
+  replicas: 3
+  aptPackages: >-
+  default_resources:  # overwritten by resource limits if they exist
+    cpu: 1
+    memory: "4GiB"
+  env:
+    - name: EXTRA_CONDA_PACKAGES
+      value: pylops zarr -c conda-forge
+    - name: EXTRA_PIP_PACKAGES
+      value: matplotlib pylops-distributed
+  resources: 
+    limits:
+      cpu: 3
+      memory: 5G
+    requests:
+      cpu: 3
+      memory: 5G
+  tolerations: []
+  nodeSelector: 
+    agentpool: vmss01
+  affinity: {}
+  port: ""
+
+jupyter:
+  enabled: true
+  env:
+    - name: EXTRA_CONDA_PACKAGES
+      value: pylops zarr -c conda-forge
+    - name: EXTRA_PIP_PACKAGES
+      value: matplotlib pylops-distributed
+  resources: 
+    limits:
+      cpu: 2
+      memory: 6G
+    requests:
+      cpu: 2
+      memory: 6G
+  nodeSelector: 
+    agentpool: vmss01

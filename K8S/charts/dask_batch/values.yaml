@@ -1,0 +1,106 @@
+---
+# nameOverride: dask
+# fullnameOverride: dask
+
+scheduler:
+  name: scheduler
+  image:
+    repository: "daskdev/dask"
+    tag: 2.11.0
+    pullPolicy: IfNotPresent
+    # See https://kubernetes.io/docs/tasks/configure-pod-container/pull-image-private-registry/
+    pullSecrets:
+    #  - name: regcred
+  replicas: 1
+  # serviceType: "ClusterIP"
+  # serviceType: "NodePort"
+  serviceType: "LoadBalancer"
+  servicePort: 8786
+  resources: {}
+  #  limits:
+  #    cpu: 1.8
+  #    memory: 6G
+  #  requests:
+  #    cpu: 1.8
+  #    memory: 6G
+  tolerations: []
+  nodeSelector: {}
+  affinity: {}
+
+webUI:
+  name: webui
+  servicePort: 80
+  ingress:
+    enabled: false
+    tls: false
+    # secretName: dask-scheduler-tls
+    hostname: dask-ui.example.com
+    annotations:
+     # kubernetes.io/ingress.class: "nginx"
+     # secretName: my-tls-cert
+     # kubernetes.io/tls-acme: "true"
+
+worker:
+  name: worker
+  image:
+    repository: "daskdev/dask"
+    tag: 2.11.0
+    pullPolicy: IfNotPresent
+    # dask_worker: "dask-cuda-worker"
+    dask_worker: "dask-worker"
+    pullSecrets:
+    #  - name: regcred
+  replicas: 3
+  aptPackages: >-
+  default_resources:  # overwritten by resource limits if they exist
+    cpu: 1
+    memory: "4GiB"
+  env:
+  #  - name: EXTRA_CONDA_PACKAGES
+  #    value: numba xarray -c conda-forge
+  #  - name: EXTRA_PIP_PACKAGES
+  #    value: s3fs dask-ml --upgrade
+  resources: {}
+  #  limits:
+  #    cpu: 1
+  #    memory: 3G
+  #    nvidia.com/gpu: 1
+  #  requests:
+  #    cpu: 1
+  #    memory: 3G
+  #    nvidia.com/gpu: 1
+  tolerations: []
+  nodeSelector: {}
+  affinity: {}
+  port: ""
+
+master:
+  name: master
+  image:
+    repository: "auroradevacr.azurecr.io/dask/mckbatch"
+    tag: latest
+    pullPolicy: Always
+  env:
+  #  - name: EXTRA_CONDA_PACKAGES
+  #    value: "numba xarray -c conda-forge"
+  #  - name: EXTRA_PIP_PACKAGES
+  #    value: "s3fs dask-ml --upgrade"
+  args:
+    - "python3"
+    - "/scripts/MDC_timing.py"
+    - "4"
+  resources: {}
+  #  limits:
+  #    cpu: 2
+  #    memory: 6G
+  #  requests:
+  #    cpu: 2
+  #    memory: 6G
+  tolerations: []
+  nodeSelector: {}
+  affinity: {}
+
+sharedStorage:
+  createPVC: false
+  storageClassName: standard
+  storageSizeRequests: 500Gi

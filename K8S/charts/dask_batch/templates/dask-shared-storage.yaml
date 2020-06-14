@@ -1,0 +1,23 @@
+{{- if .Values.sharedStorage.createPVC }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ template "dask.fullname" . }}-shared-data
+  labels:
+    app: {{ template "dask.name" . }}
+    heritage: {{ .Release.Service | quote }}
+    release: {{ .Release.Name | quote }}
+    chart: {{ template "dask.chart" . }}
+    component: shared-data
+    type: local
+    app: dask
+  # name: dask-volume
+  # namespace: dask
+spec:
+  storageClassName: {{ .Values.sharedStorage.storageClassName }}  
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: {{ .Values.sharedStorage.storageSizeRequests }}
+{{- end }}

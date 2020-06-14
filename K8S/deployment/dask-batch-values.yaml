@@ -1,0 +1,89 @@
+---
+# nameOverride: dask
+# fullnameOverride: dask
+
+scheduler:
+  resources:
+   limits:
+     cpu: 1.8
+     memory: 12G
+   requests:
+     cpu: 1.8
+     memory: 12G
+  tolerations:
+  - key: "kubernetes.azure.com/scalesetpriority"
+    operator: "Equal"
+    value: "spot"
+    effect: "NoSchedule"
+  nodeSelector:
+    agentpool: e16spot
+
+worker:
+  replicas: 4
+  aptPackages: >-
+  default_resources:  # overwritten by resource limits if they exist
+    cpu: 1
+    memory: "4GiB"
+  env:
+    - name: EXTRA_CONDA_PACKAGES
+      value: pylops zarr -c conda-forge
+    - name: EXTRA_PIP_PACKAGES
+      value: matplotlib pylops-distributed
+  resources: 
+    limits:
+      cpu: 14
+      memory: 50G
+    requests:
+      cpu: 6
+      memory: 50G
+  tolerations:
+  - key: "kubernetes.azure.com/scalesetpriority"
+    operator: "Equal"
+    value: "spot"
+    effect: "NoSchedule"
+  nodeSelector:
+    agentpool: e16spot
+  affinity: {}
+  port: ""
+
+master:
+  env:
+    - name: EXTRA_CONDA_PACKAGES
+      value: pylops zarr -c conda-forge
+    - name: EXTRA_PIP_PACKAGES
+      value: matplotlib pylops-distributed
+    - name: STORE_PATH
+      value: /data/
+    - name: PYTHONUNBUFFERED
+      value: "1"
+    - name: PYTHONIOENCODING
+      value: "UTF-8"
+  args:
+    - "python3"
+    - "/scripts/Marchenko.py"
+    - "4"
+    - "4"
+    - "3"
+    - "650"
+    - "71"
+    - "20"
+    - "200"
+    - "41"
+    - "20"
+    - "200"
+    - "0"
+    - "2800"
+  resources:
+    limits:
+      cpu: 3
+      memory: 25G
+    requests:
+      cpu: 3
+      memory: 25G
+  tolerations:
+  - key: "kubernetes.azure.com/scalesetpriority"
+    operator: "Equal"
+    value: "spot"
+    effect: "NoSchedule"
+  nodeSelector:
+    agentpool: e16spot

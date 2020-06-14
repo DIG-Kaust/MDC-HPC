@@ -53,6 +53,11 @@ a singe Zarr file using Dask for concurrent IO. The resulting file will loaded i
 use when setting up the cluster. Refer to https://docs.dask.org/en/latest/setup/ssh.html for more details.
 - ``utils.py``: Small Python functions used in various notebooks
 
+### K8S
+
+This directory contains the helm charts used to configure K8S and some instructions on how to run the ``Marchenko3D.py``
+in a Kubernetes cluster. Note that our setup is based on the https://github.com/dask/helm-chart and we refer to those
+for more details with respect to the entire configuration setup.
 
 ### Environment
 
