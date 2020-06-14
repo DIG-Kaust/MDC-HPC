@@ -59,14 +59,15 @@ This directory contains the helm charts used to configure K8S and some instructi
 in a Kubernetes cluster. Note that our setup is based on the https://github.com/dask/helm-chart and we refer to those
 for more details with respect to the entire configuration setup.
 
+### Input data:
+
+The input dataset has been created using a finite-difference modelling code available in the
+[Madagascar](http://www.ahay.org/wiki/Main_Page) sofware package. Given the size of the input dataset,
+authors will not be able to share it directly but can provide the ``SConstruct`` file used to create the data.
+
 ### Environment
 
 To ensure reproducibility of the results, we suggest using the ``requirements.txt`` file when creating an environment.
 
-
-### Input data:
-
-To obtain a copy of the input dataset, concact the authors directly.
-
-**Note:** All notebooks use the ``$STORE_PATH`` enviroment variable to specify the location of the input dataset. Either create this 
-environment variable prior to running a notebook or use ``os.environ["STORE_PATH"] = "/path/to/data/"`` directly within the notebook.
+**Note:** All notebooks use the ``$STORE_PATH`` enviroment variable to specify the location of the input dataset.
+Either create this environment variable prior to running a notebook or use ``os.environ["STORE_PATH"] = "/path/to/data/"`` directly within the notebook.
