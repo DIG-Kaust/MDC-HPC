@@ -17,6 +17,8 @@ All the figures in the abstract can be reproduced by running the following noteb
 - ``Marchenko3D_datacreation.ipynb``: Data Creation notebook. The synthetic dataset is originally separated into .npz files. In this notebook the dataset is converted into
 a singe Zarr file using Dask for concurrent IO. The resulting file will loaded into distributed memory and used for MDC and Marchenko redatuming.
 
+- ``Marchenko3D_datavisualization_time_frequency.ipynb``: Data Visualization notebook. Data in time-space, fkk, and fxy (frequencies slice) is displayed.
+
 - ``MDC_timing.ipynb``: Timing of MDC operation for single virtual source. Used to create figure 2a.
 
 - ``MDCmulti_timing.ipynb``: Timing of MDC operation for multiple virtual sources. Used to create input data for figure 2b.
